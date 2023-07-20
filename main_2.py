@@ -256,7 +256,6 @@ def tilde_psi(t: float, j: int):
         ans[i] = math.sqrt(2 / s) * math.cos(t * w_js[j, i] + b_js[j, i])
     return ans
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     # random.seed(15)
     # np.random.seed(4)

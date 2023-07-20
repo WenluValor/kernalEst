@@ -191,17 +191,17 @@ def second_partial_psi_d(t: np.array, j1: int, j2: int):
             psi[i] /= math.sqrt(2 / s) * math.cos(t[j2] * w_js[j2, v] + b_js[j2, v])
             psi[i] *= -math.sqrt(2 / s) * w_js[j2, v] * math.sin(t[j2] * w_js[j2, v] + b_js[j2, v])
         elif (ind_set[i, j1] != 0) & (ind_set[i, j2] != 0):
-            part1 = psi[i]
-            v = int(ind_set[i, j1] - 1)
-            part1 /= math.sqrt(2 / s) * math.cos(t[j1] * w_js[j1, v] + b_js[j1, v])
-            part1 *= -math.sqrt(2 / s) * w_js[j1, v] * math.sin(t[j1] * w_js[j1, v] + b_js[j1, v])
+            if (j1 != j2):
+                v = int(ind_set[i, j1] - 1)
+                part1 = -math.sqrt(2 / s) * w_js[j1, v] * math.sin(t[j1] * w_js[j1, v] + b_js[j1, v])
 
-            part2 = psi[i]
-            v = int(ind_set[i, j2] - 1)
-            part2 /= math.sqrt(2 / s) * math.cos(t[j2] * w_js[j2, v] + b_js[j2, v])
-            part2 *= -math.sqrt(2 / s) * w_js[j2, v] * math.sin(t[j2] * w_js[j2, v] + b_js[j2, v])
+                v = int(ind_set[i, j2] - 1)
+                part2 = -math.sqrt(2 / s) * w_js[j2, v] * math.sin(t[j2] * w_js[j2, v] + b_js[j2, v])
 
-            psi[i] = part1 + part2
+                psi[i] = part1 * part2
+            else:
+                v = int(ind_set[i, j1] - 1)
+                psi[i] *= -w_js[j1, v]**2
     return psi
 
 def get_index(ind: list):

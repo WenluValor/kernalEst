@@ -23,7 +23,10 @@ def generate_data(c_value: np.array, d_value: int, vec_t_up: float, vec_t_low: f
         for j in range(p + 1):
             cov[i, j] = rho_value * rho_value * std_value ** 2
         if (p == 0):
-            pass
+            if (rho_value == 0):
+                cov[i, j] = std_value ** 2
+            else:
+                pass
         else:
             cov[i, i] = std_value ** 2
 

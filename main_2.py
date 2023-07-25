@@ -49,7 +49,7 @@ def func(vec_c, data: np.array):
 
     for i in range(n):
         t = vec_t[i]
-        sum += (Y0[i] - mean_Y0 + hat_fn(t, vec_c))**2
+        sum += (Y0[i] - mean_Y0 - hat_fn(t, vec_c))**2
 
     sum /= n
 
@@ -315,6 +315,10 @@ if __name__ == '__main__':
     for i in range(size):
         t = np.random.uniform(0.5, 1.5, size=3)
         A[i] = hat_fn(t, vec_c=C).item()
+
+        t = np.insert(t, 2, 1)
+        real = dt_2.f_0(c, t)
+        A[i] = (A[i] - real)**2
     print(np.mean(A))
     print('-=-=-=-=-==-=-=-=')
 

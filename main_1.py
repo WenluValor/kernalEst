@@ -2,29 +2,30 @@ import math
 import itertools
 import numpy as np
 import pandas as pd
-import data_2 as dt_2
+import data_1 as dt_1
 import random
-import kernel_2 as knl_2
+import kernel_1 as knl_1
 import time
 import torch
 
-def set_global(c_value: np.array, vec_t_up: float, vec_t_low: float, s_value: int,
-               rho_value: float, n_value: int, std_value: float, mean_value: float, p_value: int):
-    global d, c, rho, n, Y0, Z, s, p
-    d = c_value.shape[0] - 1 # d = 3
-    c = c_value
+def set_global(T_value: int, P0_value: int, q_value: int, d_value: int, n_value: int,
+                  bound_value: np.array, p_value: int, s_value: int):
+    global d, n, Y0, Z, s, p, q, bound, T
+    d = d_value
     n = n_value
     s = s_value
     p = p_value
+    T = T_value
+    P0 = P0_value
+    q = q_value
+    bound = bound_value
 
-    dt_2.generate_data(c_value=c_value, d_value=d, vec_t_up=vec_t_up, vec_t_low=vec_t_low, rho_value=rho_value,
-                       n_value=n_value, std_value=std_value, mean_value=mean_value, p_value=p)
-    # vec_t = (t_1, t_2, 1, t_4)
+    # dt_1.generate_data(T_value=T, P0_value=P0, q_value=q, d_value=d, n_value=n, bound=bound, p_value=p)
 
     Y0 = np.array(pd.read_csv('Y0.csv', index_col=0))[:, 0]
     Z = np.array(pd.read_csv('Z.csv', index_col=0))
 
-    # knl_2.generate_wb(d=d, s=s, low=vec_t_low-vec_t_up, high=vec_t_up-vec_t_low, p_value=p)
+    # knl_1.generate_wb(d=d, s=s, bound=bound, p_value=p)
 
     global w_js, b_js
     w_js = np.array(pd.read_csv('w_js.csv', index_col=0))
@@ -38,13 +39,12 @@ def func(vec_c, data: np.array):
 
     sum = 0
     vec_t = np.array(pd.read_csv('0vec_t.csv', index_col=0))
-    vec_t = np.delete(vec_t, 2, axis=1)
 
     # mean_Y0 = np.mean(Y0)
+
     for i in range(n):
         t = vec_t[i]
-        # sum += (Y0[i] - mean_Y0 - hat_fn(t, vec_c))**2
-        sum += (Y0[i] - hat_fn(t, vec_c)) ** 2
+        sum += (Y0[i] - hat_fn(t, vec_c))**2
     sum /= n
 
     sub_sum = 0
@@ -52,22 +52,13 @@ def func(vec_c, data: np.array):
         subsub_sum = 0
         Y = Z[:, j]
         # mean_Y = np.mean(Y)
-        vec_t = np.array(pd.read_csv(str(j + 1) + 'vec_t.csv', index_col=0))
-        vec_t = np.delete(vec_t, 2, axis=1)
-
+        # vec_t = np.array(pd.read_csv(str(j + 1) + 'vec_t.csv', index_col=0))
         for i in range(n):
             t = vec_t[i]
             subsub_sum += (Y[i] - partial_hat_fn(t, vec_c, j))**2
 
         subsub_sum /= n
         sub_sum += weight[j] * subsub_sum
-
-    '''
-    print(sub_sum)
-    print('---')
-    print(sum)
-    print('===')
-    '''
 
     sum += sub_sum
 
@@ -77,7 +68,6 @@ def func(vec_c, data: np.array):
 
     sum += lmd * sub_sum
     return sum
-
 
 def descend(initX, data, tol, lr):
     optimizer = torch.optim.Adam([initX], lr=lr)
@@ -111,16 +101,15 @@ def descend(initX, data, tol, lr):
 
     return updateX, loss
 
-
 def solve(data, tol=1e-3, lr=1e-3, device="cuda"):
     beginTime = time.time()
     data = data.to(device)
     torch.manual_seed(10)
     initAction = torch.rand(((s+1)**d - 1) * (p + 1), requires_grad=True, device=device)
 
-    # initAction = np.array(pd.read_csv('torch_C.csv', index_col=0))[:, 0]
-    # initAction = torch.from_numpy(initAction).float()
-    # initAction = torch.tensor(initAction, requires_grad=True, device=device)
+    initAction = np.array(pd.read_csv('torch_C.csv', index_col=0))[:, 0]
+    initAction = torch.from_numpy(initAction).float()
+    initAction = torch.tensor(initAction, requires_grad=True, device=device)
 
     resX, resLoss = descend(initAction, data, tol=tol, lr=lr)
 
@@ -136,7 +125,7 @@ def get_vec_c_torch(lmd: float, weight: np.array):
     data = np.hstack((lmd, weight))
     data = torch.tensor(data)
     device = torch.device('cpu')
-    vec_c = solve(data, tol=1e-6, lr=1e-2, device=device)
+    vec_c = solve(data, tol=1e-4, lr=1e-3, device=device)
     return vec_c
 
 def partial_hat_fn(t: np.array, vec_c: np.array, part_ind: int):
@@ -154,9 +143,7 @@ def hat_fn(t: np.array, vec_c):
     PSI = psi_d(t)
     for i in range(p):
         PSI = np.hstack((PSI, first_partial_psi_d(t, i)))
-
     PSI = torch.from_numpy(PSI).float()
-
     ans = torch.dot(PSI, vec_c)
     return ans
 
@@ -168,6 +155,7 @@ def first_partial_psi_d(t: np.array, j: int):
     # ind_set = [[1, 0, 0], [2, 0, 0], ...]
     A = np.arange(d)
     psi = psi_d(t)
+
     # A = [0, 1, 2]
     for i in range(d):
         size = i + 1
@@ -179,6 +167,7 @@ def first_partial_psi_d(t: np.array, j: int):
         ind_set = np.vstack((ind_set, tmp))
 
     ind_set = np.delete(ind_set, 0, axis=0)
+
     for i in range(ind_set.shape[0]):
         if (ind_set[i, j] != 0):
             v = int(ind_set[i, j] - 1)
@@ -284,19 +273,31 @@ def tilde_psi(t: float, j: int):
         ans[i] = math.sqrt(2 / s) * math.cos(t * w_js[j, i] + b_js[j, i])
     return ans
 
+def get_t():
+    ans = np.zeros([d])
+    for i in range(d):
+        ans[i] = np.random.uniform(bound[2 * i], bound[2 * i + 1])
+    return ans
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     random.seed(15)
     np.random.seed(4)
-    set_global(c_value=np.array([1, 0.8, 0.7, 0.6]), vec_t_low=0.5, vec_t_up=1.5, s_value=3,
-               rho_value=0.9, n_value=100, std_value=0.35, mean_value=0, p_value=0)
+    set_global(T_value=1, P0_value=100, q_value=5000, d_value=3, n_value=21**3,
+                bound_value=np.array([80, 120, 0.01, 0.05, 0.2, 1]), p_value=2, s_value=4)
     lmd = 0
     weight = np.ones([p])
+    # for i in range(p):
+        # weight[i] = np.var(Y0) / np.var(Z[:, i])
+    # weight /= np.sum(weight).item()
+    # print(weight)
+
 
     C = get_vec_c_torch(lmd, weight)
     C = C.detach().numpy()
     DF = pd.DataFrame(C)
     DF.to_csv('torch_C.csv')
+
 
     C = np.array(pd.read_csv('torch_C.csv', index_col=0))[:, 0]
     C = torch.from_numpy(C).float()
@@ -309,20 +310,18 @@ if __name__ == '__main__':
     # vec_t = np.array(pd.read_csv('0vec_t.csv', index_col=0))
     for j in range(time):
         for i in range(size):
-            t = np.random.uniform(0.5, 1.5, size=3)
+            t = get_t()
             # t = vec_t[i]
             A[i] = hat_fn(t, vec_c=C).item()
-
-            t = np.insert(t, 2, 1)
-            real = dt_2.f_0(c, t)
+            real = dt_1.true_f0(t)
             # print(A[i])
             # print(real)
 
-            A[i] = (A[i] - real) ** 2
+            A[i] = (A[i] - real)**2
             # print((real - Y0[i])**2)
         print(np.mean(A).item())
         print(j)
-        print('p0r9n1-----')
+        print('p0q5n21-----')
 
         B[j] = np.mean(A).item()
 

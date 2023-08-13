@@ -18,21 +18,15 @@ def generate_data(c_value: np.array, d_value: int, vec_t_up: float, vec_t_low: f
         name = str(i) + 'vec_t.csv'
         DF.to_csv(name)
 
-    cov = np.eye(p + 1)
-    for i in range(p + 1):
-        for j in range(p + 1):
-            cov[i, j] = rho_value * rho_value * std_value ** 2
-        if (p == 0):
-            if (rho_value == 0):
-                cov[i, j] = std_value ** 2
-            else:
-                pass
-        else:
-            cov[i, i] = std_value ** 2
+    cov = np.eye(d)
+    for i in range(d):
+        for j in range(d):
+            cov[i, j] = rho_value * std_value**2
+        cov[i, i] = std_value ** 2
 
-
-    vec_epsilon = np.random.multivariate_normal(mean=np.zeros(p+1) + mean_value, cov=cov, size=n)
-    # epsilon = n*(p+1)
+    vec_epsilon = np.random.multivariate_normal(mean=np.zeros(d) + mean_value, cov=cov, size=n)
+    # epsilon = n*(d+1)
+    vec_epsilon = vec_epsilon[:, 0: p + 1]
     DF = pd.DataFrame(vec_epsilon)
     DF.to_csv('vec_epsilon.csv')
 

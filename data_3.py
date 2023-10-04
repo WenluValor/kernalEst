@@ -67,11 +67,8 @@ def Y_0(t: np.array, ind: list):
     sum /= x_dt.shape[0]
     return sum
 
-def partial_A(t: np.array, j: int):
+def partial_A(j: int):
     # j =  1, 2, 3
-    t1 = t[0]
-    t2 = t[1]
-    t3 = t[2]
     if j == 1:
         ans = np.array([[0, 1, 0, 0],
                         [0, -1, 1, 0],
@@ -90,10 +87,11 @@ def partial_A(t: np.array, j: int):
     return ans
 
 def partial_eta(x, t: np.array, j: int):
-    mat_A = math.exp(x) * partial_A(t, j)
+    mat_A = math.exp(x) * A(t)
+    mat_A = np.dot(partial_A(j), linalg.expm(mat_A))
     e1 = np.array([1, 0, 0, 0])
     e4 = np.array([0, 0, 0, 1])
-    ans = np.dot(np.dot(e1, linalg.expm(mat_A)), e4)
+    ans = np.dot(np.dot(e1, mat_A), e4) * math.exp(x)
     return ans
 
 def partial_Y(t: np.array, j: int, ind: list):

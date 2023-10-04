@@ -25,7 +25,9 @@ def generate_data(p_value: int, n_value: int, d_value: int, up: float, down: flo
     Y0 = np.zeros([n])
     vec_t = np.array(pd.read_csv('0vec_t.csv', index_col=0))
     for i in range(n):
-        Y0[i] = Y_0(t=vec_t[i])
+        ind = np.random.choice(np.array(x_data.shape[0]), 10)
+        ind = list(ind)
+        Y0[i] = Y_0(t=vec_t[i], ind=ind)
     DF = pd.DataFrame(Y0)
     DF.to_csv('Y0.csv')
 
@@ -33,7 +35,9 @@ def generate_data(p_value: int, n_value: int, d_value: int, up: float, down: flo
     for j in range(p):
         vec_t = np.array(pd.read_csv(str(j + 1) + 'vec_t.csv', index_col=0))
         for i in range(n):
-            Z[i, j] = partial_Y(t=vec_t[i], j=j + 1)
+            ind = np.random.choice(np.array(x_data.shape[0]), 10)
+            ind = list(ind)
+            Z[i, j] = partial_Y(t=vec_t[i], j=j + 1, ind=ind)
     DF = pd.DataFrame(Z)
     DF.to_csv('Z.csv')
 
@@ -54,7 +58,55 @@ def eta(x, t: np.array):
     ans = np.dot(np.dot(e1, linalg.expm(mat_A)), e4)
     return ans
 
-def Y_0(t: np.array):
+def Y_0(t: np.array, ind: list):
+    x_dt = x_data[ind]
+    z_dt = z_data[ind]
+    sum = 0
+    for i in range(x_dt.shape[0]):
+        sum += (z_dt[i] - eta(x_dt[i], t))**2
+    sum /= x_dt.shape[0]
+    return sum
+
+def partial_A(t: np.array, j: int):
+    # j =  1, 2, 3
+    t1 = t[0]
+    t2 = t[1]
+    t3 = t[2]
+    if j == 1:
+        ans = np.array([[0, 1, 0, 0],
+                        [0, -1, 1, 0],
+                        [0, 0, -1, 1],
+                        [0, 0, 0, -1]])
+    elif j == 2:
+        ans = np.array([[-1, 0, 0, 0],
+                        [1, -1, 0, 0],
+                        [0, 1, -1, 0],
+                        [0, 0, 1, 0]])
+    else:
+        ans = np.array([[-1, 0, 0, 0],
+                        [0, 0, 0, 0],
+                        [0, 0, 0, 0],
+                        [0, 0, 0, 0]])
+    return ans
+
+def partial_eta(x, t: np.array, j: int):
+    mat_A = math.exp(x) * partial_A(t, j)
+    e1 = np.array([1, 0, 0, 0])
+    e4 = np.array([0, 0, 0, 1])
+    ans = np.dot(np.dot(e1, linalg.expm(mat_A)), e4)
+    return ans
+
+def partial_Y(t: np.array, j: int, ind: list):
+    # j = 1, 2, 3
+    sum = 0
+    x_dt = x_data[ind]
+    z_dt = z_data[ind]
+    for i in range(x_dt.shape[0]):
+        sum += (z_dt[i] - eta(x_dt[i], t)) * partial_eta(x_dt[i], t, j)
+    sum *= -2 / x_dt.shape[0]
+    return sum
+
+def true_f(t: np.array):
     x_data = np.array([-1.71479842809193, -1.02165124753198, -0.579818495252942, -0.198450938723838, 0.0953101798043249,
                        0.350656871613169, 0.598836501088704, 0.824175442966349, 1.03673688495002, 1.23547147138531,
                        1.43031124653667, 1.62136648329937, 1.80500469597808, 1.98513086220859, 2.16332302566054,
@@ -70,41 +122,4 @@ def Y_0(t: np.array):
     for i in range(x_data.shape[0]):
         sum += (z_data[i] - eta(x_data[i], t))**2
     sum /= x_data.shape[0]
-    return sum
-
-def partial_A(t: np.array, j: int):
-    # j =  1, 2, 3
-    t1 = t[0]
-    t2 = t[1]
-    t3 = t[2]
-    if j == 1:
-        ans = np.array([[-t2 - t3, 1, 0, 0],
-                        [t2, -1 - t2, 1, 0],
-                        [0, t2, -1 - t2, 1],
-                        [0, 0, t2, -1]])
-    elif j == 2:
-        ans = np.array([[-1 - t3, t1, 0, 0],
-                        [1, -t1 - 1, t1, 0],
-                        [0, 1, -t1 - 1, t1],
-                        [0, 0, 1, -t1]])
-    else:
-        ans = np.array([[-t2 - 1, t1, 0, 0],
-                        [t2, -t1 - t2, t1, 0],
-                        [0, t2, -t1 - t2, t1],
-                        [0, 0, t2, -t1]])
-    return ans
-
-def partial_eta(x, t: np.array, j: int):
-    mat_A = math.exp(x) * partial_A(t, j)
-    e1 = np.array([1, 0, 0, 0])
-    e4 = np.array([0, 0, 0, 1])
-    ans = np.dot(np.dot(e1, linalg.expm(mat_A)), e4)
-    return ans
-
-def partial_Y(t: np.array, j: int):
-    # j = 1, 2, 3
-    sum = 0
-    for i in range(x_data.shape[0]):
-        sum += (z_data[i] - eta(x_data[i], t)) * partial_eta(x_data[i], t, j)
-    sum *= -2 / x_data.shape[0]
     return sum

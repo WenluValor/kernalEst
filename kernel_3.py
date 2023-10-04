@@ -13,10 +13,17 @@ def opt_bandwith(index: int, p_value, fold=5):
 
 def func(bd, index: int, p_value, fold):
     vec_t = np.array([0, 0, 0])
+    '''
     for i in range(p_value + 1):
         file_name = str(i) + 'vec_t.csv'
         tmp_t = np.array(pd.read_csv(file_name, index_col=0))
         vec_t = np.vstack((vec_t, tmp_t))
+    vec_t = np.delete(vec_t, 0, axis=0)
+    '''
+
+    file_name = str(0) + 'vec_t.csv'
+    tmp_t = np.array(pd.read_csv(file_name, index_col=0))
+    vec_t = np.vstack((vec_t, tmp_t))
     vec_t = np.delete(vec_t, 0, axis=0)
 
     t = vec_t[:, index]

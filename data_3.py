@@ -17,15 +17,37 @@ def generate_data(p_value: int, n_value: int, d_value: int, up: float, down: flo
     n = n_value
     d = d_value
 
+    '''
+    # random sample
     for i in range(p + 1):
         vec_t = np.random.uniform(down, up, size=(n, d))
+        # vec_t = np.arange(1000 * i, (i + 1) * 1000)
         DF = pd.DataFrame(vec_t)
         DF.to_csv(str(i) + 'vec_t.csv')
+    '''
+
+    '''
+    # grid sample
+    vec_t = np.zeros([n, d])
+    dt = np.arange(0, 1000)
+    for i in dt:
+        hundred = int(i / 100)
+        ten = int((i - 100 * hundred) / 10)
+        single = i - 100 * hundred - 10 * ten
+        vec_t[i, 0] = single
+        vec_t[i, 1] = ten
+        vec_t[i, 2] = hundred
+    vec_t /= 10
+    DF = pd.DataFrame(vec_t)
+    DF.to_csv('0vec_t.csv')
+    '''
+
+
 
     Y0 = np.zeros([n])
     vec_t = np.array(pd.read_csv('0vec_t.csv', index_col=0))
     for i in range(n):
-        ind = np.random.choice(np.array(x_data.shape[0]), 10)
+        ind = np.random.choice(np.array(x_data.shape[0]), 10, replace=False)
         ind = list(ind)
         Y0[i] = Y_0(t=vec_t[i], ind=ind)
     DF = pd.DataFrame(Y0)
@@ -35,7 +57,7 @@ def generate_data(p_value: int, n_value: int, d_value: int, up: float, down: flo
     for j in range(p):
         vec_t = np.array(pd.read_csv(str(j + 1) + 'vec_t.csv', index_col=0))
         for i in range(n):
-            ind = np.random.choice(np.array(x_data.shape[0]), 10)
+            ind = np.random.choice(np.array(x_data.shape[0]), 10, replace=False)
             ind = list(ind)
             Z[i, j] = partial_Y(t=vec_t[i], j=j + 1, ind=ind)
     DF = pd.DataFrame(Z)

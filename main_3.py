@@ -7,7 +7,6 @@ import random
 import kernel_3 as knl_3
 import time
 import torch
-from sklearn import preprocessing
 
 def set_global(vec_t_up: float, vec_t_low: float, s_value: int,
                n_value: int, d_value, p_value: int):
@@ -18,69 +17,52 @@ def set_global(vec_t_up: float, vec_t_low: float, s_value: int,
     p = p_value
 
     # dt_3.generate_data(p_value=p, n_value=n, d_value=d, up=vec_t_up, down=vec_t_low)
-    # vec_t = (t_1, t_2, t_3)
 
     Y0 = np.array(pd.read_csv('Y0.csv', index_col=0))[:, 0]
-    Z = np.array(pd.read_csv('Z.csv', index_col=0))
+    # Y0 *= 100
+    Y0 = torch.tensor(Y0)
 
-    # knl_3.generate_wb(d=d, s=s, low=vec_t_low-vec_t_up, up=vec_t_up-vec_t_low, p_value=p)
+    Z = np.array(pd.read_csv('Z.csv', index_col=0))
+    Z = torch.tensor(Z)
+
+    # knl_3.generate_wb(d_value=d, s_value=s)
 
     global w_js, b_js
     w_js = np.array(pd.read_csv('w_js.csv', index_col=0))
-    b_js = np.array(pd.read_csv('b_js.csv', index_col=0))
+    w_js = torch.tensor(w_js)
 
+    b_js = np.array(pd.read_csv('b_js.csv', index_col=0))
+    b_js = torch.tensor(b_js)
     return
 
-def func(vec_c, data: np.array):
-    lmd = data[0].item()
-    weight = data[1: ].detach().numpy()
+def func(vec_c, data):
 
-    sum = 0
-    vec_t = np.array(pd.read_csv('0vec_t.csv', index_col=0))
-    # vec_t = preprocessing.scale(vec_t)
+    # const_c = vec_c[-1]
+    # vec_c = vec_c[0: ((s+1)**d - 1) * (p + 1)]
 
-    # mean_Y0 = np.mean(Y0)
-    for i in range(n):
-        t = vec_t[i]
-        # sum += (Y0[i] - mean_Y0 - hat_fn(t, vec_c))**2
-        sum += (Y0[i] - hat_fn(t, vec_c)) ** 2
-    sum /= n
+    lmd = data[0]
+    weight = data[1: ]
 
-    sub_sum = 0
+    sum_main = torch.square(Y0 - torch.matmul(MAT_PSI.double(), vec_c.double()))
+    loss_main = torch.mean(sum_main)
+
+    sum_part = torch.zeros([p])
     for j in range(p):
-        subsub_sum = 0
         Y = Z[:, j]
-        # mean_Y = np.mean(Y)
-        vec_t = np.array(pd.read_csv(str(j + 1) + 'vec_t.csv', index_col=0))
-        # vec_t = preprocessing.scale(vec_t)
 
-        for i in range(n):
-            t = vec_t[i]
-            subsub_sum += (Y[i] - partial_hat_fn(t, vec_c, j))**2
+        tmp = torch.square(Y - torch.matmul(PART_PSI_List[j].double(), vec_c.double()))
+        sum_part[j] = torch.mean(tmp)
+    loss_part = torch.dot(sum_part, weight.float())
 
-        subsub_sum /= n
-        sub_sum += weight[j] * subsub_sum
+    sum_penalty = torch.square(vec_c)
+    loss_penalty = torch.sum(sum_penalty) * lmd
 
-    '''
-    print(sub_sum)
-    print('---')
-    print(sum)
-    print('===')
-    '''
-
-    sum += sub_sum
-
-    sub_sum = 0
-    for i in range(vec_c.shape[0]):
-        sub_sum += vec_c[i]**2
-
-    sum += lmd * sub_sum
-    return sum
+    tot_loss = loss_main + loss_part + loss_penalty
+    return tot_loss
 
 
 def descend(initX, data, tol, lr):
     optimizer = torch.optim.Adam([initX], lr=lr)
-    # optimizer = torch.optim.SGD([initX], lr=lr, momentum=0.9)
     updateX = initX * 2 - 1
     loss = func(updateX, data)
     last_loss = 3 * loss.item()
@@ -96,7 +78,6 @@ def descend(initX, data, tol, lr):
         lossABackward = torch.sum(loss)
         optimizer.zero_grad()
         lossABackward.backward()
-        # loss.backward()
         optimizer.step()
 
         print(last_loss)
@@ -117,9 +98,9 @@ def solve(data, tol=1e-3, lr=1e-3, device="cuda"):
     torch.manual_seed(10)
     initAction = torch.rand(((s+1)**d - 1) * (p + 1), requires_grad=True, device=device)
 
-    # initAction = np.array(pd.read_csv('torch_C.csv', index_col=0))[:, 0]
-    # initAction = torch.from_numpy(initAction).float()
-    # initAction = torch.tensor(initAction, requires_grad=True, device=device)
+    initAction = np.array(pd.read_csv('torch_C.csv', index_col=0))[:, 0]
+    initAction = torch.from_numpy(initAction).float()
+    initAction = torch.tensor(initAction, requires_grad=True, device=device)
 
     resX, resLoss = descend(initAction, data, tol=tol, lr=lr)
 
@@ -135,161 +116,217 @@ def get_vec_c_torch(lmd: float, weight: np.array):
     data = np.hstack((lmd, weight))
     data = torch.tensor(data)
     device = torch.device('cpu')
-    vec_c = solve(data, tol=1e-6, lr=1e-2, device=device)
+    # create_mat()
+    global MAT_PSI, PART_PSI_List
+    MAT_PSI = np.array(pd.read_csv('mat_PSI.csv', index_col=0))
+    MAT_PSI = torch.from_numpy(MAT_PSI)
+
+    PART_PSI_List = [None] * p
+    for i in range(p):
+        mat_PSI = np.array(pd.read_csv(str(i) + 'part_mat_PSI.csv', index_col=0))
+        PART_PSI_List[i] = torch.from_numpy(mat_PSI)
+
+    vec_c = solve(data, tol=1e-10, lr=1e-3, device=device)
     return vec_c
 
-def partial_hat_fn(t: np.array, vec_c: np.array, part_ind: int):
-    PSI = first_partial_psi_d(t, part_ind)
+def create_mat():
+    mat_PSI = get_pdPSI()
+    mat_PSI = mat_PSI.detach().numpy()
+    DF = pd.DataFrame(mat_PSI)
+    DF.to_csv('mat_PSI.csv')
 
     for i in range(p):
-        PSI = np.hstack((PSI, second_partial_psi_d(t, i, part_ind)))
-    PSI = torch.from_numpy(PSI).float()
-    ans = torch.dot(PSI, vec_c)
-    return ans
+        mat_PSI = get_partial_pdPSI(i)
+        mat_PSI = mat_PSI.detach().numpy()
+        DF = pd.DataFrame(mat_PSI)
+        DF.to_csv(str(i) + 'part_mat_PSI.csv')
+    return
 
-def hat_fn(t: np.array, vec_c):
+def hat_fn_loss(X_test, Y_test, vec_c):
+    Y_pred = hat_fn(X_test, vec_c)
+    sum_main = torch.square(Y_test - Y_pred)
+    loss_main = torch.mean(sum_main)
+    return loss_main
+
+def hat_fn(X_test, vec_c):
+    mat_PSI = get_pdPSI(vec_t=X_test)
+    return torch.matmul(mat_PSI.double(), vec_c.double())
+
+def hat_partial_fn_loss(X_test, Y_test, vec_c, part_ind):
+    Y_pred = hat_partial_fn(X_test, vec_c, part_ind)
+    tmp = torch.square(Y_test - Y_pred)
+    sum_part = torch.mean(tmp)
+    return sum_part
+
+def hat_partial_fn(X_test, vec_c, part_ind):
+    mat_PSI = get_partial_pdPSI(part_ind, vec_t=X_test)
+    return torch.matmul(mat_PSI.double(), vec_c.double())
+
+def get_pdPSI(vec_t=1):
+    if isinstance(vec_t, int):
+        vec_t = np.array(pd.read_csv(str(0) + 'vec_t.csv', index_col=0))
+        # vec_t *= 100
+        vec_t = torch.tensor(vec_t)
+
+    PSI = pdPSI(vec_t[0]).reshape(1, -1)
+    for i in range(1, vec_t.shape[0]):
+        tmp = pdPSI(vec_t[i]).reshape(1, -1)
+        PSI = torch.cat((PSI, tmp), 0)
+    return PSI
+
+def get_partial_pdPSI(part_ind, vec_t=1):
+    if isinstance(vec_t, int):
+        vec_t = np.array(pd.read_csv(str(part_ind + 1) + 'vec_t.csv', index_col=0))
+        # vec_t *= 100
+        vec_t = torch.tensor(vec_t)
+
+    PSI = partial_pdPSI(vec_t[0], part_ind).reshape(1, -1)
+    for i in range(1, vec_t.shape[0]):
+        tmp = partial_pdPSI(vec_t[i], part_ind).reshape(1, -1)
+        PSI = torch.cat((PSI, tmp), 0)
+    return PSI
+
+def partial_pdPSI(t, part_ind: int):
+    PSI = first_diff_psi_d(t, part_ind)
+    for i in range(p):
+        PSI = torch.cat((PSI, second_diff_psi_d(t, i, part_ind)), 0)
+    return PSI
+
+def pdPSI(t):
     # t = (t1, t2, t4) is not existing data
     PSI = psi_d(t)
     for i in range(p):
-        PSI = np.hstack((PSI, first_partial_psi_d(t, i)))
+        PSI = torch.cat((PSI, first_diff_psi_d(t, i)), 0)
+    return PSI
 
-    PSI = torch.from_numpy(PSI).float()
+def second_diff_psi_d(t, j1: int, j2: int):
+    # j1, j2 = 0, 1, ... p-1
+    mat_cos = tilde_psi(t, 0)
+    mat_first = tilde_psi(t, 1)
+    mat_zero = torch.zeros([d, s])
 
-    ans = torch.dot(PSI, vec_c)
-    return ans
-
-def first_partial_psi_d(t: np.array, j: int):
-    # j = 0, 1 (p-1)
-    # t = (t1, t2, t4)
-    index = []
-    ind_set = np.zeros([d])
-    # ind_set = [[1, 0, 0], [2, 0, 0], ...]
-    A = np.arange(d)
-    psi = psi_d(t)
-    # A = [0, 1, 2]
-    for i in range(d):
-        size = i + 1
-        B = list(itertools.combinations(A, size))
-        index = index + B
-    for item in index:
-        tmp = get_index(list(item))
-        ind_set = np.vstack((ind_set, tmp))
-
-    ind_set = np.delete(ind_set, 0, axis=0)
-    for i in range(ind_set.shape[0]):
-        if (ind_set[i, j] != 0):
-            v = int(ind_set[i, j] - 1)
-            psi[i] /= math.sqrt(2 / s) * math.cos(t[j] * w_js[j, v] + b_js[j, v])
-            psi[i] *= -math.sqrt(2 / s) * w_js[j, v] * math.sin(t[j] * w_js[j, v] + b_js[j, v])
-        else:
-            psi[i] = 0
-    return psi
-
-def second_partial_psi_d(t: np.array, j1: int, j2: int):
-    # j1 = 0, 1; j2 = 0, 1
-    index = []
-    ind_set = np.zeros([d])
-    # ind_set = [[1, 0, 0], [2, 0, 0], ...]
-    A = np.arange(d)
-    psi = psi_d(t)
-    # A = [0, 1, 2]
-    for i in range(d):
-        size = i + 1
-        B = list(itertools.combinations(A, size))
-        index = index + B
-
-    for item in index:
-        tmp = get_index(list(item))
-        ind_set = np.vstack((ind_set, tmp))
-
-    ind_set = np.delete(ind_set, 0, axis=0)
-
-    for i in range(ind_set.shape[0]):
-        if (ind_set[i, j1] != 0) & (ind_set[i, j2] != 0):
-            if (j1 != j2):
-                v = int(ind_set[i, j1] - 1)
-                part1 = -math.sqrt(2 / s) * w_js[j1, v] * math.sin(t[j1] * w_js[j1, v] + b_js[j1, v])
-                psi[i] /= math.sqrt(2 / s) * math.cos(t[j1] * w_js[j1, v] + b_js[j1, v])
-
-                v = int(ind_set[i, j2] - 1)
-                part2 = -math.sqrt(2 / s) * w_js[j2, v] * math.sin(t[j2] * w_js[j2, v] + b_js[j2, v])
-                psi[i] /= math.sqrt(2 / s) * math.cos(t[j2] * w_js[j2, v] + b_js[j2, v])
-
-                psi[i] *= part1 * part2
-            else:
-                v = int(ind_set[i, j1] - 1)
-                psi[i] *= -w_js[j1, v]**2
-        else: psi[i] = 0
-    return psi
-
-def get_index(ind: list):
-    # ind = [0, 1, 2] / [1, 2]
-    size = len(ind)
-    ans = np.zeros([s**size, d])
-
-    for i in range(size):
-        row = 0
-        col = ind[i]
-        thold = s**(size - i - 1)
-        while (row < s**size):
-            for j in range(s):
-                count = 0
-                while (count < thold):
-                    ans[row, col] = j + 1
-                    row += 1
-                    count += 1
-    return ans
-
-def psi_d(t: np.array):
-    # t = (t1, t2, t4)
-    comb = []
     ind_set = []
-    leng = t.shape[0]
     for i in range(t.shape[0]):
         j = i + 1
-        A = list(itertools.combinations(t, j))
-        B = list(itertools.combinations(np.arange(leng), j))
-        comb = comb + A
+        B = list(itertools.combinations(np.arange(t.shape[0]), j))
         ind_set = ind_set + B
 
-    ans = np.array([])
-    for i in range(len(comb)):
-        sub_t = np.array(comb[i])
-        sub_ind = np.array(ind_set[i])
-        ans = np.hstack((ans, psi_order(sub_t, sub_ind)))
+    ans = torch.tensor([])
+    if j1 == j2:
+        ans = first_diff_psi_d(t, part_ind=j1, is_two_order=True)
+        return ans
+
+    for i in range(len(ind_set)):
+        if (j1 in ind_set[i]) & (j2 in ind_set[i]):
+            ind_i = int(ind_set[i][0])
+            if (ind_set[i][0] == j1) | (ind_set[i][0] == j2):
+                tmp = mat_first[ind_i]
+            else:
+                tmp = mat_cos[ind_i]
+
+            pos1 = ind_set[i].index(j1)
+            pos2 = ind_set[i].index(j2)
+            for l in range(1, len(ind_set[i])):
+                ind_i = int(ind_set[i][l])
+                if (l == pos1) | (l == pos2):
+                    tmp = torch.kron(tmp, mat_first[ind_i])
+                else:
+                    tmp = torch.kron(tmp, mat_cos[ind_i])
+        else:
+            ind_i = int(ind_set[i][0])
+            tmp = mat_zero[ind_i]
+            for l in range(1, len(ind_set[i])):
+                ind_i = int(ind_set[i][l])
+                tmp = torch.kron(tmp, mat_zero[ind_i])
+
+        ans = torch.cat((ans, tmp), 0)
     return ans
 
-def psi_order(t: np.array, ind: np.array):
-    # order = 1, 2, 3
-    # t = (t1, t2, t4) / (t1, t2)
-    order = t.shape[0]
-    tilde = [None] * order
-    for i in range(order):
-        # print(ind[i])
-        tilde[i] = tilde_psi(t[i], ind[i])
+def first_diff_psi_d(t, part_ind: int, is_two_order=False):
+    # part_ind = 0, 1, ... p-1
+    mat_cos = tilde_psi(t, 0)
+    mat_first = tilde_psi(t, 1)
+    if is_two_order:
+        mat_first = tilde_psi(t, 2)
+    mat_zero = torch.zeros([d, s])
 
-    ans = tilde[0]
-    for i in range(order - 1):
-        ans = np.kron(ans, tilde[i + 1])
+    ind_set = []
+    for i in range(t.shape[0]):
+        j = i + 1
+        B = list(itertools.combinations(np.arange(t.shape[0]), j))
+        ind_set = ind_set + B
+
+    ans = torch.tensor([])
+    for i in range(len(ind_set)):
+        if part_ind in ind_set[i]:
+            ind_i = int(ind_set[i][0])
+            if ind_set[i][0] == part_ind:
+                tmp = mat_first[part_ind]
+            else:
+                tmp = mat_cos[ind_i]
+
+            pos = ind_set[i].index(part_ind)
+            for l in range(1, len(ind_set[i])):
+                ind_i = int(ind_set[i][l])
+                if l == pos:
+                    tmp = torch.kron(tmp, mat_first[part_ind])
+                else:
+                    tmp = torch.kron(tmp, mat_cos[ind_i])
+        else:
+            ind_i = int(ind_set[i][0])
+            tmp = mat_zero[ind_i]
+            for l in range(1, len(ind_set[i])):
+                ind_i = int(ind_set[i][l])
+                tmp = torch.kron(tmp, mat_zero[ind_i])
+
+        ans = torch.cat((ans, tmp), 0)
     return ans
 
-def tilde_psi(t: float, j: int):
-    # j = 0, 1, 2, j = 2 means take valus in t_4
-    ans = np.zeros([s])
-    for i in range(s):
-        ans[i] = math.sqrt(2 / s) * math.cos(t * w_js[j, i] + b_js[j, i])
+def psi_d(t):
+    # t = torch, size = 3
+    mat_cos = tilde_psi(t, 0)
+
+    ind_set = []
+    for i in range(t.shape[0]):
+        j = i + 1
+        B = list(itertools.combinations(np.arange(t.shape[0]), j))
+        ind_set = ind_set + B
+
+    ans = torch.tensor([])
+    for i in range(len(ind_set)):
+        ind_i = int(ind_set[i][0])
+        tmp = mat_cos[ind_i]
+        for l in range(1, len(ind_set[i])):
+            ind_i = int(ind_set[i][l])
+            tmp = torch.kron(tmp, mat_cos[ind_i])
+
+        ans = torch.cat((ans, tmp), 0)
     return ans
+
+def tilde_psi(t, order):
+    # t of shape (d, )
+    # order = 0, 1, 2
+    # each row is s-dim random feature
+    new_t = torch.kron(t.reshape(-1, 1), torch.ones(s))
+    ans = new_t * w_js + b_js
+    if order == 0:
+        return torch.cos(ans) * math.sqrt(2 / s)
+    elif order == 1:
+        return -torch.sin(ans) * w_js * math.sqrt(2 / s)
+    elif order == 2:
+        return -torch.cos(ans) * w_js * w_js * math.sqrt(2 / s)
+    return
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     random.seed(15)
     np.random.seed(4)
-    set_global(vec_t_up=1, vec_t_low=0, s_value=3,
+    set_global(vec_t_up=1, vec_t_low=0, s_value=8,
                n_value=1000, d_value=3, p_value=3)
     lmd = 0
-    weight = np.ones([p])
+    weight = torch.ones([p])
     for i in range(p):
-        weight[i] = np.var(Y0) / np.var(Z[:, i])
+        weight[i] = torch.var(Y0) / torch.var(Z[:, i])
 
     C = get_vec_c_torch(lmd, weight)
     C = C.detach().numpy()
@@ -298,33 +335,25 @@ if __name__ == '__main__':
 
     C = np.array(pd.read_csv('torch_C.csv', index_col=0))[:, 0]
     C = torch.from_numpy(C).float()
-    size = 100
+
+    size = 1000
     A = np.zeros([size])
-    time = 200
+    time = 10
     B = np.zeros(time)
 
     np.random.seed(7)
     # vec_t = np.array(pd.read_csv('0vec_t.csv', index_col=0))
     for j in range(time):
-        # t_test = np.random.uniform(0, 1, size=(size, 3))
-        # t_test = preprocessing.scale(t_test)
+        t = torch.rand((size, d))
+        # t *= 100
+        Y_test = torch.zeros([size])
+
         for i in range(size):
-            # t = t_test[i]
-            t = np.random.uniform(0, 1, size=3)
-            # t = vec_t[i]
-            A[i] = hat_fn(t, vec_c=C).item()
+            Y_test[i] = torch.tensor(dt_3.true_f(t[i]))
 
-            real = dt_3.Y_0(t)
-            # print(A[i])
-            # print(real)
-
-            A[i] = (A[i] - real) ** 2
-            # print((real - Y0[i])**2)
-        print(np.mean(A).item())
-        print(j)
-        print('p0n1000-----')
-
-        B[j] = np.mean(A).item()
+        B[j] = hat_fn_loss(X_test=t, Y_test=Y_test, vec_c=C)
+        print(B[j])
+        print('p1n1000-----')
 
     print(np.mean(B))
     print(np.std(B))

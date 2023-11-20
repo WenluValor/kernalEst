@@ -1,8 +1,10 @@
 # kernelEst
-Kernel estimation (code test)
+boots.py (main program), including point and interval estimation. For now, only point estimation is ran.
 
-main_2.py: main file
+data_1, data_2, data_3.py: generate data and provide true_f for evaluation.
 
-kernel_2.py: kernel and sampling
+main.py: regress on hat{f}_n.
 
-data_2.py: generate data
+test_1, test_2 test_3.py: calculate MSEs and STDs from point estimation.
+
+

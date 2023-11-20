@@ -1,5 +1,5 @@
 # kernelEst
-boots.py (main program), including point and interval estimation. For now, only point estimation is ran.
+boots.py (main program), including point and interval estimation. For now, only point estimation is ran. Interval estimation remains to change (the codes below regress_boots())
 
 data_1, data_2, data_3.py: generate data and provide true_f for evaluation.
 

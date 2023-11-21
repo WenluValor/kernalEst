@@ -18,7 +18,7 @@ To produce MSEs and STDs, you only need to edit boots.py, main.py, test_x.py (te
    * $d$ (dimensions of data): $d=3$ for all three examples.
    * $p$ (type of gradients): must $\le d$.
    * $B$ (number of bootstrap): we take $B=200$ for all three examples.
-   * $case_num$ (type of examples): can be either $1, 2, 3$, allowing for different data-generation process.
+   * case_num (type of examples): can be either $1, 2, 3$, allowing for different data-generation process.
 2. Data generation in boots.py.
    
    Set the proper data generation parameters in the function **dt_x.generate_data()**, remember to remove the annotation sign if it blocks data generation.

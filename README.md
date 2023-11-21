@@ -35,7 +35,7 @@ To produce MSEs and STDs, you only need to edit boots.py, main.py, test_x.py (te
 
    Keep **main.create_mat(s=s, N=n, d=d, p=p)** in case it is annotated.
 
-   It will produce mat_PSI.csv, part_mat_PSI.csv, whose meanings are $\Psi_{p(d+1)}(\boldsymbol{t}_i^{(j)})$, $\frac{\partial }{\partial t_j} \cdot \Psi_{p(d+1)}(\boldsymbol{t}_i^{(j)})$ in the paper.
+   It will produce mat_PSI.csv, part_mat_PSI.csv, whose meanings are $\Psi_{p(d+1)}(\boldsymbol{t}_i^{(j)})$, $\frac{\partial }{\partial t_j} \Psi$ in the paper.
 
 8. Regress to find $\boldsymbol{c}$.
    
@@ -43,16 +43,16 @@ To produce MSEs and STDs, you only need to edit boots.py, main.py, test_x.py (te
 
    It will produce torch_C.csv, whose meaning is $\boldsymbol{c}$ in the paper.
 
-   Default is not to use $\lmd$ for regularization, since it turns out to be a better result. If you set **use_lmd=True**, we also find the minimizer $\lmd$ for GCV, doing so will create the file lmd.csv.
+   Default is not to use $\lambda$ for regularization, since it turns out to be a better result. If you set **use_lmd=True**, we also find the minimizer $\lambda$ for GCV, doing so will create the file lmd.csv.
 
 10. Set proper learning rates and tolerance:
 
     Before clicking on 'run', you should check the learning rate and tolerance in line 145 of main.py, which is the last line inside the function **get_vec_c_torch()**.
 
     The regression relies highly on the random features, so we recommend tunning for different learning rate and tolerance based on what you derive from kernel.py. In generation, a recommendation for learing rate and tolerance are:
-    * Case1: (tol, lr)= $(1e-4, 1e-2)$, it may vary from $(1e-6 - 1e-3, 1e-3 - 1e-2)$ depending on the data.
-    * Case2: (tol, lr)= $(1e-8, 1e-2)$, it may vary from $(1e-10 - 1e-7, 1e-3 - 1e-2)$ depending on the data.
-    * Case3: (tol, lr)= $(1e-12, 1e-3)$, it may vary from $(1e-11 - 1e-14, 1e-3)$ depending on the data.
+    * Case1: (tol, lr)= $(1e^{-4}, 1e^{-2})$, it may vary from $(1e^{-6} - 1e^{-3}, 1e^{-3} - 1e^{-2})$ depending on the data.
+    * Case2: (tol, lr)= $(1e^{-8}, 1e^{-2})$, it may vary from $(1e^{-10} - 1e^{-7}, 1e^{-3} - 1e^{-2})$ depending on the data.
+    * Case3: (tol, lr)= $(1e^{-12}, 1e^{-3})$, it may vary from $(1e^{-11} - 1e^{-7}, 1e^{-3})$ depending on the data.
 
 11. Click 'run' in the boots.py.
 12. Evaluate MSEs and STDs:

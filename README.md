@@ -52,7 +52,7 @@ To produce MSEs and STDs, you only need to edit boots.py, main.py, test_x.py (te
     The regression relies highly on the random features, so we recommend tunning for different learning rate and tolerance based on what you derive from kernel.py. In generation, a recommendation for learing rate and tolerance are:
     * Case1: (tol, lr)= $(1e^{-4}, 1e^{-2})$, it may vary from $(1e^{-6} - 1e^{-3}, 1e^{-3} - 1e^{-2})$ depending on the data.
     * Case2: (tol, lr)= $(1e^{-8}, 1e^{-2})$, it may vary from $(1e^{-10} - 1e^{-7}, 1e^{-3} - 1e^{-2})$ depending on the data.
-    * Case3: (tol, lr)= $(1e^{-12}, 1e^{-3})$, it may vary from $(1e^{-11} - 1e^{-7}, 1e^{-3})$ depending on the data.
+    * Case3: (tol, lr)= $(1e^{-12}, 1e^{-3})$, it may vary from $(1e^{-14} - 1e^{-11}, 1e^{-3})$ depending on the data.
 
 11. Click 'run' in the boots.py.
 12. Evaluate MSEs and STDs:

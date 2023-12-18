@@ -1,6 +1,6 @@
 # Readme
 ## File Introduction
-* boots.py (main program): including point and interval estimation. For now, only point estimation is ran. Interval estimation remains to change (the codes below regress_boots())
+* mse_rep.py (main program): including point and interval estimation. For now, only point estimation is ran. Interval estimation remains to change (the codes below regress_boots())
 
 * data_1.py, data_2.py, data_3.py: generate data and provide $f_0$ for evaluation.
 
@@ -12,7 +12,7 @@
 
 ## How to produce MSEs and STDs
 To produce MSEs and STDs, you only need to edit boots.py, main.py, test_x.py (test file depends on which case you are looking for).
-1. Set proper paramters in boots.py.
+1. Set proper paramters in mse_rep.py, and create a folder 'MSE_outcome' under the directory.
    * $s$ (dimensions of random features): can be any positive integer.
    * $n$ (number of observations): decide how many data points will be generated.
    * $d$ (dimensions of data): $d=3$ for all three examples.
@@ -50,11 +50,11 @@ To produce MSEs and STDs, you only need to edit boots.py, main.py, test_x.py (te
     Before clicking on 'run', you should check the learning rate and tolerance in line 145 of main.py, which is the last line inside the function **get_vec_c_torch()**.
 
     The regression relies highly on the random features, so we recommend tunning for different learning rate and tolerance based on what you derive from kernel.py. In generation, a recommendation for learing rate and tolerance are:
-    * Case1: (tol, lr)= $(1e^{-4}, 1e^{-2})$, it may vary from $(1e^{-6} - 1e^{-3}, 1e^{-3} - 1e^{-2})$ depending on the data.
-    * Case2: (tol, lr)= $(1e^{-8}, 1e^{-2})$, it may vary from $(1e^{-10} - 1e^{-7}, 1e^{-3} - 1e^{-2})$ depending on the data.
-    * Case3: (tol, lr)= $(1e^{-12}, 1e^{-3})$, it may vary from $(1e^{-14} - 1e^{-11}, 1e^{-3})$ depending on the data.
+    * Case1: (tol, lr)= $(1e^{-4}, 1e^{-2})$.
+    * Case2: (tol, lr)= $(1e^{-8}, 1e^{-2})$.
+    * Case3: (tol, lr)= $(1e^{-12}, 1e^{-3})$.
 
-11. Click 'run' in the boots.py.
+11. Click 'run' in the mse_rep.py.
 12. Evaluate MSEs and STDs:
     
     Run the test_x.py after setting the correct $s, n, d, p$ in the **set_global()**.

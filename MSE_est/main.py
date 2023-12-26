@@ -434,66 +434,11 @@ def gcv_func(lmd, b: int, is_scipy=False):
     else:
         return numerator / denominator
 
-def gcv_descend(initX, tol, lr, b: int):
-    optimizer = torch.optim.Adam([initX], lr=lr)
-    updateX = initX * 2 - 1
-    loss = gcv_func(updateX, b=b)
-    last_loss = 3 * loss.item()
-    new_loss = 2 * loss.item()
-    count = 0
-
-    while (last_loss - new_loss > tol) | (last_loss < new_loss):
-        last_loss = new_loss
-
-        updateX = initX
-        loss = gcv_func(updateX, b=b)
-        new_loss = loss.item()
-        lossABackward = torch.sum(loss)
-        optimizer.zero_grad()
-        lossABackward.backward()
-        optimizer.step()
-
-        # print(last_loss)
-        # print(new_loss)
-        # print(count)
-        # print('-----------GCV=========')
-        count += 1
-
-    updateX = initX
-    loss = gcv_func(updateX, b=b)
-
-    return updateX, loss
-
-
-def gcv_solve(tol=1e-3, lr=1e-3, device="cuda", b=-1):
-    # beginTime = time.time()
-
-    # initAction = torch.tensor([0.0], requires_grad=True, device=device)
-    initAction = np.array(pd.read_csv('lmd.csv', index_col=0))[:, 0]
-    initAction = torch.from_numpy(initAction).float()
-    initAction = initAction.clone().detach().requires_grad_(True)
-    # initAction = torch.tensor(initAction, requires_grad=True, device=device)
-
-    resX, resLoss = gcv_descend(initAction, tol=tol, lr=lr, b=b)
-
-    # endTime = time.time()
-
-    print("------------------GCV--------------------")
-    # print("Time: %.3f" % (endTime - beginTime))
-
-    # print("loss: %.8f" % (float(resLoss)))
-    return torch.abs(resX.detach())
 
 def get_gcv_lmd(b: int):
-    if b == -1:
-        lmd0 = np.array([0])
-        res = minimize(gcv_func, lmd0, args=(b, True), bounds=((1e-9, 1e-2),))
-        lmd = torch.tensor(res.x)
-    else:
-        device = torch.device('cpu')
-        lmd = gcv_solve(tol=1e-4, lr=1e-2, device=device, b=b)
-        if lmd > 1e-2:
-            lmd = torch.tensor([1e-2])
+    lmd0 = np.array([0])
+    res = minimize(gcv_func, lmd0, args=(b, True), bounds=((1e-9, 1e-2),))
+    lmd = torch.tensor(res.x)
     return lmd
 
 def boots_get_pdPSI(vec_t, N: int, s: int, d: int, p: int, b=-1):

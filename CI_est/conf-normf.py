@@ -64,13 +64,13 @@ def get_v(x):
     lmd = torch.tensor(lmd)
 
     # norm_C:
-    mat_M = lmd * torch.eye(((s + 1)**d - 1) * (p + 1))
+    # mat_M = lmd * torch.eye(((s + 1)**d - 1) * (p + 1))
 
     # norm_f:
-    # part_1 = torch.ones([(s + 1)**d - 1])
-    # part_2 = torch.zeros([((s + 1)**d - 1) * p])
-    # part_3 = torch.cat((part_1, part_2))
-    # mat_M = lmd * torch.diag(part_3)
+    part_1 = torch.ones([(s + 1)**d - 1])
+    part_2 = torch.zeros([((s + 1)**d - 1) * p])
+    part_3 = torch.cat((part_1, part_2))
+    mat_M = lmd * torch.diag(part_3)
     for i in range(p + 1):
         if i == 0:
             # print( MAT_PSI.shape), ([100, 645]), p=2, n=100
@@ -119,14 +119,14 @@ def get_vx_diag(x):
     return vx @ diag_eps
 
 def get_sigma():
-    ans = N * torch.norm(vx_diag, p=2, dim=1)
+    ans = math.sqrt(N) * torch.norm(vx_diag, p=2, dim=1)
     return ans.reshape(-1, 1)
 
 def band_sigma(x):
     vx = get_v(x)
     diag_eps = get_diag_eps()
     mat = vx @ diag_eps
-    return N * torch.norm(mat, p=2, dim=1).reshape(-1, 1)
+    return math.sqrt(N) * torch.norm(mat, p=2, dim=1).reshape(-1, 1)
 
 def get_alpha(base_num: int, alpha0, case_num: int):
     # Warning: only works for d = 3, remain to generalize
@@ -250,9 +250,9 @@ def get_probability(alpha, case_num: int):
     else:
         from data_3 import true_f
 
-    size = 1000
+    size = 10000
     batch = int(size / 10)
-    time = 20
+    time = 200
     ans = np.zeros([time])
     for i in range(time):
         for j in range(10):
@@ -290,9 +290,9 @@ def get_probability(alpha, case_num: int):
     return np.mean(ans)
 
 def get_area(alpha, case_num: int):
-    size = 1000
+    size = 10000
     batch = int(size / 10)
-    time = 20
+    time = 200
     ans = np.zeros([time])
 
     if case_num == 1:

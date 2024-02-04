@@ -9,7 +9,7 @@ import torch
 from scipy.optimize import minimize
 import os
 
-def set_global(b: int, s_value: int, n_value: int, d_value, p_value: int):
+def set_global(s_value: int, n_value: int, d_value, p_value: int):
     random.seed(15)
     np.random.seed(4)
     torch.manual_seed(10)
@@ -20,26 +20,19 @@ def set_global(b: int, s_value: int, n_value: int, d_value, p_value: int):
     s = s_value
     p = p_value
 
-    if b == -1:
-        Y0 = np.array(pd.read_csv('Y0.csv', index_col=0))[:, 0]
-        Y0 = torch.from_numpy(Y0)
+    Y0 = np.array(pd.read_csv('Y0.csv', index_col=0))[:, 0]
+    Y0 = torch.from_numpy(Y0)
 
-        Z = np.array(pd.read_csv('Z.csv', index_col=0))
-        Z = torch.from_numpy(Z)
-    else:
-        if os.path.exists('Boots_outcome/' + str(b) + '_Y0.csv'):
-            Y0 = np.array(pd.read_csv('Boots_outcome/' + str(b) + '_Y0.csv', index_col=0))[:, 0]
-            Y0 = torch.from_numpy(Y0)
+    Z = np.array(pd.read_csv('Z.csv', index_col=0))
+    Z = torch.from_numpy(Z)
 
-        if os.path.exists('Boots_outcome/' + str(b) + '_Z.csv'):
-            Z = np.array(pd.read_csv('Boots_outcome/' + str(b) + '_Z.csv', index_col=0))
-            Z = torch.from_numpy(Z)
 
     w_js = np.array(pd.read_csv('w_js.csv', index_col=0))
     w_js = torch.from_numpy(w_js)
 
     b_js = np.array(pd.read_csv('b_js.csv', index_col=0))
     b_js = torch.from_numpy(b_js)
+
     return
 
 def func(vec_c, data):
@@ -60,7 +53,12 @@ def func(vec_c, data):
         sum_part[j] = torch.mean(tmp)
     loss_part = torch.dot(sum_part, weight.float())
 
-    sum_penalty = torch.square(vec_c)
+    # norm_C:
+    # sum_penalty = torch.square(vec_c)
+
+    # norm_f (no derivative):
+    c0 = vec_c[0: ((s + 1) ** d - 1), ]
+    sum_penalty = torch.square(c0)
     loss_penalty = torch.sum(sum_penalty) * lmd
 
     tot_loss = loss_main + loss_part + loss_penalty
@@ -125,11 +123,11 @@ def get_vec_c_torch(lmd, weight: np.array):
 
     data = torch.cat((lmd, weight), dim=0)
     device = torch.device('cpu')
-    vec_c = solve(data, tol=1e-8, lr=1e-2, device=device)
+    vec_c = solve(data, tol=1e-4, lr=1e-2, device=device)
     return vec_c
 
-def create_mat(s, N, d, p, b=-1):
-    set_global(b=b, s_value=s, n_value=N, d_value=d, p_value=p)
+def create_mat(s, N, d, p):
+    set_global(s_value=s, n_value=N, d_value=d, p_value=p)
 
     mat_PSI = get_pdPSI()
     mat_PSI = mat_PSI.detach().numpy()
@@ -183,7 +181,6 @@ def get_pdPSI(vec_t=1):
 def get_partial_pdPSI(part_ind, vec_t=1):
     if isinstance(vec_t, int):
         vec_t = np.array(pd.read_csv(str(part_ind + 1) + 'vec_t.csv', index_col=0))
-        # vec_t *= 100
         vec_t = torch.from_numpy(vec_t)
 
     PSI = partial_pdPSI(vec_t[0], part_ind).reshape(1, -1)
@@ -325,16 +322,18 @@ def tilde_psi(t, order):
     return
 
 
-def boots_compute(N: int, s: int, d: int, p: int, b=-1, use_lmd=False):
-    set_global(b=b, s_value=s, n_value=N, d_value=d, p_value=p)
+def boots_compute(N: int, s: int, d: int, p: int, use_lmd=False):
+    set_global(s_value=s, n_value=N, d_value=d, p_value=p)
     if use_lmd:
-        lmd = get_gcv_lmd()
-        store_lmd = lmd.detach().numpy()
-        DF = pd.DataFrame(store_lmd)
-        if b == -1:
-            DF.to_csv('lmd.csv')
+        if os.path.exists('lmd.csv'):
+            lmd = np.array(pd.read_csv('lmd.csv', index_col=0))[:, 0]
+            lmd = torch.tensor(lmd)
         else:
-            DF.to_csv('Boots_outcome/' + str(b) + '_lmd.csv')
+            lmd = get_gcv_lmd()
+            store_lmd = lmd.detach().numpy()
+            DF = pd.DataFrame(store_lmd)
+            DF.to_csv('lmd.csv')
+
     else:
         lmd = torch.tensor([0])
 
@@ -345,46 +344,25 @@ def boots_compute(N: int, s: int, d: int, p: int, b=-1, use_lmd=False):
     C = get_vec_c_torch(lmd=lmd, weight=weight)
     C = C.detach().numpy()
     DF = pd.DataFrame(C)
-    if b == -1:
-        DF.to_csv('torch_C.csv')
-    else:
-        DF.to_csv('Boots_outcome/' + str(b) + '_torch_C.csv')
-        variance = np.zeros([p + 1])
-        Y_star = np.array(pd.read_csv('Boots_outcome/' + str(b) + '_Y0.csv', index_col=0))[:, 0]
-        variance[0] = np.var(Y_star)
+    DF.to_csv('torch_C.csv')
 
-        Z_star = np.array(pd.read_csv('Boots_outcome/' + str(b) + '_Z.csv', index_col=0))
-        for i in range(p):
-            variance[i + 1] = np.var(Z_star[:, i])
-        DF = pd.DataFrame(variance)
-        DF.to_csv('Boots_outcome/' + str(b) + '_var.csv')
-        os.remove('Boots_outcome/' + str(b) + '_Y0.csv')
-        os.remove('Boots_outcome/' + str(b) + '_Z.csv')
     return
 
 
-def boots_hat_fn(t, N: int, s: int, d: int, p: int, b=-1):
-    set_global(b=b, s_value=s, n_value=N, d_value=d, p_value=p)
+def boots_hat_fn(t, N: int, s: int, d: int, p: int):
+    set_global(s_value=s, n_value=N, d_value=d, p_value=p)
 
-    if b == -1:
-        vec_c = np.array(pd.read_csv('torch_C.csv', index_col=0))[:, 0]
-        vec_c = torch.from_numpy(vec_c).float()
-    else:
-        vec_c = np.array(pd.read_csv('Boots_outcome/' + str(b) + '_torch_C.csv', index_col=0))[:, 0]
-        vec_c = torch.from_numpy(vec_c).float()
+    vec_c = np.array(pd.read_csv('torch_C.csv', index_col=0))[:, 0]
+    vec_c = torch.from_numpy(vec_c).float()
 
     return hat_fn(X_test=t, vec_c=vec_c.reshape(-1, 1))
 
 
-def boots_partial_fn(t, part_ind, N: int, s: int, d: int, p: int, b=-1):
-    set_global(b, s_value=s, n_value=N, d_value=d, p_value=p)
+def boots_partial_fn(t, part_ind, N: int, s: int, d: int, p: int):
+    set_global(s_value=s, n_value=N, d_value=d, p_value=p)
 
-    if b == -1:
-        vec_c = np.array(pd.read_csv('torch_C.csv', index_col=0))[:, 0]
-        vec_c = torch.from_numpy(vec_c).float()
-    else:
-        vec_c = np.array(pd.read_csv('Boots_outcome/' + str(b) + '_torch_C.csv', index_col=0))[:, 0]
-        vec_c = torch.from_numpy(vec_c).float()
+    vec_c = np.array(pd.read_csv('torch_C.csv', index_col=0))[:, 0]
+    vec_c = torch.from_numpy(vec_c).float()
 
     return hat_partial_fn(X_test=t, part_ind=part_ind, vec_c=vec_c.reshape(-1, 1))
 
@@ -422,10 +400,15 @@ def get_gcv_lmd():
     lmd = torch.tensor(res.x)
     return lmd
 
-def boots_get_pdPSI(vec_t, N: int, s: int, d: int, p: int, b=-1):
-    set_global(b=b, s_value=s, n_value=N, d_value=d, p_value=p)
+def boots_get_pdPSI(vec_t, N: int, s: int, d: int, p: int):
+    set_global(s_value=s, n_value=N, d_value=d, p_value=p)
     mat_PSI = get_pdPSI(vec_t=vec_t)
     return mat_PSI
+
+def boots_get_partpdPSI(vec_t, part_ind: int, N: int, s: int, d: int, p: int):
+    set_global(s_value=s, n_value=N, d_value=d, p_value=p)
+    part_PSI = get_partial_pdPSI(part_ind=part_ind, vec_t=vec_t)
+    return part_PSI
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':

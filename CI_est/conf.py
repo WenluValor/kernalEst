@@ -7,6 +7,7 @@ import pandas as pd
 import torch
 
 from main import boots_hat_fn
+from main import boots_partial_fn
 import main
 
 from scipy import stats
@@ -44,30 +45,10 @@ def set_global(p_value, s_value, d_value, B_value):
         PART_PSI_List[i] = torch.from_numpy(mat_PSI)
     return
 
-
-def get_s_chi(x, b=-1):
-    if b == -1:
-        Y_star = Y0
-        Z_star = Z
-
-        weight = torch.ones([p])
-        for i in range(p):
-            weight[i] = torch.var(Y0) / torch.var(Z[:, i])
-
-        sig_sqr = torch.ones([1 + p])
-        for i in range(1, p + 1):
-            sig_sqr[i] = torch.var(Z_star[:, i - 1])
-        sig_sqr[0] = torch.var(Y_star)
-
-    else:
-        var_star = np.array(pd.read_csv('Boots_outcome/' + str(b) + '_var.csv', index_col=0))[:, 0]
-        var_star = torch.from_numpy(var_star)
-
-        weight = torch.ones([p])
-        for i in range(p):
-            weight[i] = var_star[0] / var_star[i + 1]
-
-        sig_sqr = var_star
+def get_v(x):
+    weight = torch.ones([p])
+    for i in range(p):
+        weight[i] = torch.var(Y0) / torch.var(Z[:, i])
 
     coef = torch.ones([p + 1])
     for i in range(1, p + 1):
@@ -76,18 +57,16 @@ def get_s_chi(x, b=-1):
 
     # part_ind = 0, 1, ... p-1
     if os.path.exists('lmd.csv'):
-        if b == -1:
-            lmd = np.array(pd.read_csv('lmd.csv', index_col=0))[:, 0]
-        else:
-            lmd = np.array(pd.read_csv('Boots_outcome/' + str(b) + '_lmd.csv', index_col=0))[:, 0]
+        lmd = np.array(pd.read_csv('lmd.csv', index_col=0))[:, 0]
     else:
-        lmd = 1e-9
+        # lmd = 1e-9
+        lmd = 0
     lmd = torch.tensor(lmd)
 
     mat_M = lmd * torch.eye(((s + 1)**d - 1) * (p + 1))
     for i in range(p + 1):
         if i == 0:
-            # print( MAT_PSI.shape), ([100, 645])
+            # print( MAT_PSI.shape), ([100, 645]), p=2, n=100
             tmp = coef[i] * torch.matmul(torch.transpose(MAT_PSI, 0, 1), MAT_PSI)
             mat_M += tmp
         else:
@@ -95,70 +74,58 @@ def get_s_chi(x, b=-1):
             tmp = coef[i] * torch.matmul(torch.transpose(PART_PSI_List[part_ind], 0, 1), PART_PSI_List[part_ind])
             mat_M += tmp
 
-    mat_M = torch.linalg.inv(mat_M).double()
+    # mat_M = torch.linalg.inv(mat_M) # size: M * M
+    mat_M = torch.pinverse(mat_M)
 
-    tmp = coef[0] * torch.sqrt(sig_sqr[0]) * torch.matmul(mat_M, torch.transpose(MAT_PSI, 0, 1))
-    mat_sum = torch.matmul(tmp, torch.transpose(tmp, 0, 1))
+    mat_W = coef[0] * MAT_PSI
     for i in range(p):
-        tmp = coef[i + 1] * torch.sqrt(sig_sqr[i + 1]) * torch.matmul(mat_M, torch.transpose(PART_PSI_List[i], 0, 1))
-        mat_sum += torch.matmul(tmp, torch.transpose(tmp, 0, 1))
+        tmp = coef[i + 1] * PART_PSI_List[i]
+        mat_W = torch.cat((mat_W, tmp), dim=0)
+        tmp = Z[:, i]
+    mat_W = torch.transpose(mat_W, 0, 1) # size: M * ((p+1)n)
 
-    psi_x = main.boots_get_pdPSI(vec_t=x, N=N, s=s, d=d, p=p)
-    tmp = torch.matmul(psi_x, mat_sum)
-    mat_res = torch.matmul(tmp, torch.transpose(psi_x, 0, 1))
-    return torch.sqrt(torch.diag(mat_res)).reshape(-1, 1)
+    psi_x = main.boots_get_pdPSI(vec_t=x, N=N, s=s, d=d, p=p) # size: size_x * M
 
-
-def get_g_star(x):
-    # size of N_x * B
-    g_star = boots_hat_fn(t=x, b=0, N=N, s=s, d=d, p=p).reshape(-1, 1)
-    for b in range(1, B):
-        tmp = boots_hat_fn(t=x, b=b, N=N, s=s, d=d, p=p).reshape(-1, 1)
-        g_star = torch.cat((g_star, tmp), dim=1)
-    return g_star
+    mat_res = psi_x @ mat_M.double() @ mat_W # size: size_x * ((p+1)n)
+    return mat_res
 
 
-def get_mat_z(alpha):
-    alpha = alpha.detach().numpy()
-    norm = stats.norm(loc=0, scale=1)
-    z_alpha = norm.ppf(1 - alpha / 2)
-    z_alpha = torch.from_numpy(z_alpha)
-    mat_z = torch.diag(z_alpha)
-    return mat_z
+def get_epsilon(part_ind=-1):
+    if part_ind == -1:
+        epsilon = Y0 - boots_hat_fn(t=-1, N=N, s=s, d=d, p=p)
+    else:
+        epsilon = Z[:, part_ind] - boots_partial_fn(t=-1, part_ind=part_ind, N=N, s=s, d=d, p=p)
+    # tmp = epsilon.detach().numpy()
+    # rng = np.random.default_rng()
+    # samples = rng.choice(tmp[:, 0], N, replace=True)
+    # epsilon = torch.from_numpy(samples).reshape(-1, 1)
+    return epsilon
 
 
-def get_g(x):
-    g_0 = boots_hat_fn(t=x, b=-1, N=N, s=s, d=d, p=p).reshape(-1, 1)
-    g_0 = torch.kron(g_0, torch.ones([B]))
-    return g_0
+def get_diag_eps():
+    eps = get_epsilon()
+    for i in range(p):
+        tmp = get_epsilon(part_ind=i)
+        eps = torch.cat((eps, tmp), dim=0)
+    return torch.diag(eps[:, 0])
 
 
-def get_chi_sigma(x):
-    ans = get_s_chi(x=x, b=0)
-    for b in range(1, B):
-        tmp = get_s_chi(x=x, b=b)
-        ans = torch.cat((ans, tmp), dim=1)
-    return ans
+def get_vx_diag(x):
+    vx = get_v(x)
+    diag_eps = get_diag_eps()
+    return vx @ diag_eps
 
+def get_sigma():
+    ans = math.sqrt(N) * torch.norm(vx_diag, p=2, dim=1)
+    return ans.reshape(-1, 1)
 
-def get_beta(x, alpha0):
-    # alpha0: scalar
-    global mat_g, g_star, chi_sigma
-    mat_g = get_g(x)
-    g_star = get_g_star(x)
-    chi_sigma = get_chi_sigma(x)
+def band_sigma(x):
+    vx = get_v(x)
+    diag_eps = get_diag_eps()
+    mat = vx @ diag_eps
+    return math.sqrt(N) * torch.norm(mat, p=2, dim=1).reshape(-1, 1)
 
-    tmp = torch.div(g_star - mat_g, chi_sigma)
-
-    q = torch.tensor([alpha0 / 2, 1 - alpha0 / 2]).double()
-    res_quan = torch.quantile(tmp, q, dim=1)
-    low = torch.min(res_quan[0])
-    up = torch.max(res_quan[1])
-
-    return [low, up]
-
-
-def hat_alpha_xi(base_num: int, alpha0, case_num: int):
+def get_alpha(base_num: int, alpha0, case_num: int):
     # Warning: only works for d = 3, remain to generalize
     grid_vec_t = np.zeros([base_num ** 3, 3])
 
@@ -185,34 +152,40 @@ def hat_alpha_xi(base_num: int, alpha0, case_num: int):
 
     grid_x = torch.from_numpy(grid_vec_t)
 
-    beta_set = get_beta(x=grid_x, alpha0=alpha0)
-
-    return beta_set
-
-
-def get_final_alpha_xi(alpha0, end: int, case_num: int, start=1):
-    round = end - start
-    alpha_set = torch.zeros([round, 2])
-    for base_num in range(start, end):
-        tmp = hat_alpha_xi(base_num, alpha0, case_num=case_num)
-        alpha_set[base_num - start, 0] = tmp[0]
-        alpha_set[base_num - start, 1] = tmp[1]
-        print(base_num)
-        print(alpha_set[base_num - start])
-    low = torch.min(alpha_set[:, 0]).item()
-    up = torch.max(alpha_set[:, 1]).item()
-    ans = np.zeros([2])
-    ans[0] = low
-    ans[1] = up
-    return ans
+    global vx_diag, sigma
+    vx_diag = get_vx_diag(x=grid_x)
+    sigma = get_sigma()
 
 
-def get_band(x, alpha):
-    g_0 = boots_hat_fn(t=x, b=-1, N=N, s=s, d=d, p=p)
-    s_chi = get_s_chi(x)[:, 0]
-    z_alpha = alpha
+    M_set = torch.ones([B])
+    for b in range(B):
+        torch.manual_seed(b + 1)
+        h_b = torch.rand((N, N)).double()
+        vec_h = torch.rand((N, 1)).double()
+        # B_x = vx_diag @ (torch.transpose(h_b, 0, 1) - h_b) @ torch.ones([N]).reshape(-1, 1).double() / math.sqrt(2)
+        B_x = vx_diag @ vec_h * math.sqrt(N)
+        sigma_inv = 1 / sigma
+        tmp = torch.abs(math.sqrt(N) * sigma_inv * B_x)
+        M_set[b] = torch.max(tmp)
 
-    return g_0[:, 0] - s_chi * z_alpha
+    return torch.quantile(M_set, 1 - alpha0)
+
+
+
+def get_band(x, alpha, is_low=True):
+    g_0 = boots_hat_fn(t=x, N=N, s=s, d=d, p=p)
+    # adaptive
+    s_chi = band_sigma(x)[:, 0]
+    z_alpha = alpha / math.sqrt(N)
+
+    # fixed width
+    # s_chi = 1
+    # z_alpha = alpha
+
+    if is_low:
+        return g_0[:, 0] - s_chi * z_alpha
+    else:
+        return g_0[:, 0] + s_chi * z_alpha
 
 
 def plot_band(n_num, alpha, case_num: int):
@@ -228,9 +201,9 @@ def plot_band(n_num, alpha, case_num: int):
     elif case_num == 2:
         x = x + 0.5
 
-    up = get_band(x=x, alpha=alpha[0]).numpy()
-    low = get_band(x=x, alpha=alpha[1]).numpy()
-    mid = boots_hat_fn(t=x, b=-1, N=N, s=s, d=d, p=p)
+    low = get_band(x=x, alpha=alpha, is_low=True).numpy()
+    up = get_band(x=x, alpha=alpha, is_low=False).numpy()
+    mid = boots_hat_fn(t=x, N=N, s=s, d=d, p=p)
 
     import matplotlib.pyplot as plt
     if case_num == 1:
@@ -281,10 +254,9 @@ def get_probability(alpha, case_num: int):
     else:
         from data_3 import true_f
 
-    torch.manual_seed(7)
-    size = 10000
+    size = 1000
     batch = int(size / 10)
-    time = 200
+    time = 20
     ans = np.zeros([time])
     for i in range(time):
         for j in range(10):
@@ -298,8 +270,8 @@ def get_probability(alpha, case_num: int):
             elif case_num == 2:
                 x = x + 0.5
 
-            up = get_band(x=x, alpha=alpha[0]).numpy()
-            low = get_band(x=x, alpha=alpha[1]).numpy()
+            low = get_band(x=x, alpha=alpha, is_low=True).numpy()
+            up = get_band(x=x, alpha=alpha, is_low=False).numpy()
 
             x_axis = x.detach().numpy()
             y_axis = np.zeros([x_axis.shape[0]])
@@ -322,10 +294,9 @@ def get_probability(alpha, case_num: int):
     return np.mean(ans)
 
 def get_area(alpha, case_num: int):
-    torch.manual_seed(7)
-    size = 10000
+    size = 1000
     batch = int(size / 10)
-    time = 200
+    time = 20
     ans = np.zeros([time])
 
     if case_num == 1:
@@ -345,9 +316,14 @@ def get_area(alpha, case_num: int):
             elif case_num == 2:
                 x = x + 0.5
 
-            s_chi = get_s_chi(x)[:, 0].numpy()
-            z_alpha = alpha[1] - alpha[0]
-            tmp = s_chi * z_alpha
+            # adaptive
+            s_chi = band_sigma(x)[:, 0].numpy()
+            z_alpha = alpha / math.sqrt(N)
+            tmp = 2 * s_chi * z_alpha
+
+            # fixed width
+            # tmp = 2 * alpha
+
             ans[i] += np.mean(tmp)
         ans[i] = ans[i] / 10 * vol
         print(ans[i])
@@ -355,32 +331,32 @@ def get_area(alpha, case_num: int):
     return np.mean(ans)
 
 
+
 if __name__ == '__main__':
     random.seed(15)
     np.random.seed(4)
     torch.manual_seed(10)
     s = 5
-    n = 200
+    n = 7**3
     d = 3
-    p = 2
+    p = 0
     B = 200
-    case_num = 2
+    case_num = 1
     alpha = 0.05
-
 
     set_global(p_value=p, d_value=d, s_value=s, B_value=B)
 
-    # ans = get_final_alpha_xi(alpha0=alpha, start=1, end=10, case_num=case_num)
-    # DF = pd.DataFrame(ans)
-    # DF.to_csv('alpha.csv')
+    ans = get_alpha(alpha0=alpha, base_num=10, case_num=case_num)
 
-    alpha = np.array(pd.read_csv('alpha.csv', index_col=0))[:, 0]
+    with open('alpha.csv', 'w') as f:
+        f.write(str(ans.item()))
+    alpha = np.array(pd.read_csv('alpha.csv', header=None))[0]
 
     prob = get_probability(alpha=alpha, case_num=case_num)
     area = get_area(alpha=alpha, case_num=case_num)
     print('--------result-------')
     print(prob)
     print(area)
-    plot_band(n_num=1000, alpha=alpha, case_num=case_num)
+    plot_band(n_num=100, alpha=alpha, case_num=case_num)
 
     exit(0)
